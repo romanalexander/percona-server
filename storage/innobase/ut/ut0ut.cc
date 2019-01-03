@@ -44,6 +44,7 @@ Created 5/11/1994 Heikki Tuuri
 #endif /* !UNIV_HOTBACKUP */
 
 #include "os0thread.h"
+#include "srv0srv.h"
 #include "ut0ut.h"
 
 #ifdef UNIV_NONINL
@@ -374,12 +375,13 @@ ut_delay(
 	ulint	delay)	/*!< in: delay in microseconds on 100 MHz Pentium */
 {
 	ulint	i, j;
+	const ulint	iterations = delay * srv_spin_wait_pause_multiplier;
 
 	UT_LOW_PRIORITY_CPU();
 
 	j = 0;
 
-	for (i = 0; i < delay * 50; i++) {
+	for (i = 0; i < iterations; i++) {
 		j += i;
 		UT_RELAX_CPU();
 	}

@@ -22447,6 +22447,13 @@ static MYSQL_SYSVAR_ULONG(spin_wait_delay, srv_spin_wait_delay,
   "Maximum delay between polling for a spin lock (6 by default)",
   NULL, NULL, 6L, 0L, ~0UL, 0);
 
+static MYSQL_SYSVAR_ULONG(spin_wait_pause_multiplier,
+  srv_spin_wait_pause_multiplier, PLUGIN_VAR_RQCMDARG,
+  "Controls how many times in a row to use a PAUSE instruction to achieve"
+  " one unit of delay in a spin lock (see @@innodb_spin_wait_delay),"
+  " defaults to 50",
+  NULL, NULL, 50, 0, 100, 0);
+
 static MYSQL_SYSVAR_ULONG(thread_concurrency, srv_thread_concurrency,
   PLUGIN_VAR_RQCMDARG,
   "Helps in performance tuning in heavily concurrent environments. Sets the maximum number of threads allowed inside InnoDB. Value 0 will disable the thread throttling.",
@@ -23062,6 +23069,7 @@ static struct st_mysql_sys_var* innobase_system_variables[]= {
   MYSQL_SYSVAR(online_alter_log_max_size),
   MYSQL_SYSVAR(sync_spin_loops),
   MYSQL_SYSVAR(spin_wait_delay),
+  MYSQL_SYSVAR(spin_wait_pause_multiplier),
   MYSQL_SYSVAR(table_locks),
   MYSQL_SYSVAR(thread_concurrency),
   MYSQL_SYSVAR(adaptive_max_sleep_delay),

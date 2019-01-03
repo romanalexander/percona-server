@@ -498,6 +498,7 @@ ulint	srv_pass_corrupt_table = 0; /* 0:disable 1:enable */
 /*-------------------------------------------*/
 ulong	srv_n_spin_wait_rounds	= 30;
 ulong	srv_spin_wait_delay	= 6;
+ulong	srv_spin_wait_pause_multiplier	= 50;
 ibool	srv_priority_boost	= TRUE;
 
 static ulint		srv_n_rows_inserted_old		= 0;
