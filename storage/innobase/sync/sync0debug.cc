@@ -64,7 +64,7 @@ it may wait for this event */
 static os_event_t		rw_lock_debug_event;
 
 /** This is set to true, if there may be waiters for the event */
-static bool			rw_lock_debug_waiters;
+static volatile bool		rw_lock_debug_waiters;
 
 /** The latch held by a thread */
 struct Latched {
@@ -1267,7 +1267,7 @@ LatchDebug::init()
 
 	rw_lock_debug_event = os_event_create("rw_lock_debug_event");
 
-	rw_lock_debug_waiters = FALSE;
+	rw_lock_debug_waiters = false;
 }
 
 /** Shutdown the latch debug checking
@@ -1314,15 +1314,17 @@ rw_lock_debug_mutex_enter()
 			return;
 		}
 
-		os_event_reset(rw_lock_debug_event);
+		int64_t sig_count =
+			os_event_reset(rw_lock_debug_event);
 
-		rw_lock_debug_waiters = TRUE;
+		__atomic_exchange_n(
+			&rw_lock_debug_waiters, true, __ATOMIC_ACQ_REL);
 
 		if (0 == mutex_enter_nowait(&rw_lock_debug_mutex)) {
 			return;
 		}
 
-		os_event_wait(rw_lock_debug_event);
+		os_event_wait_low(rw_lock_debug_event, sig_count);
 	}
 }
 
@@ -1332,8 +1334,8 @@ rw_lock_debug_mutex_exit()
 {
 	mutex_exit(&rw_lock_debug_mutex);
 
-	if (rw_lock_debug_waiters) {
-		rw_lock_debug_waiters = FALSE;
+	if (__atomic_exchange_n(
+		&rw_lock_debug_waiters, false, __ATOMIC_ACQ_REL)) {
 		os_event_set(rw_lock_debug_event);
 	}
 }
