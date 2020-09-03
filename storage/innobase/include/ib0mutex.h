@@ -673,16 +673,9 @@ struct TTASEventMutex {
 	void exit()
 		UNIV_NOTHROW
 	{
-		/* A problem: we assume that mutex_reset_lock word
-		is a memory barrier, that is when we read the waiters
-		field next, the read must be serialized in memory
-		after the reset. A speculative processor might
-		perform the read first, which could leave a waiting
-		thread hanging indefinitely. */
-
 		tas_unlock();
 
-		if (m_waiters != 0) {
+		if (__atomic_load_n(&m_waiters, __ATOMIC_SEQ_CST) != 0) {
 			signal();
 		}
 	}
@@ -857,24 +850,16 @@ private:
 		m_policy.add(n_spins, n_waits);
 	}
 
-	/** @return the value of the m_waiters flag */
-	lock_word_t waiters() UNIV_NOTHROW
-	{
-		return(m_waiters);
-	}
-
 	/** Note that there are threads waiting on the mutex */
 	void set_waiters() UNIV_NOTHROW
 	{
-		m_waiters = 1;
-		os_wmb;
+		__atomic_store_n(&m_waiters, 1, __ATOMIC_SEQ_CST);
 	}
 
 	/** Note that there are no threads waiting on the mutex */
 	void clear_waiters() UNIV_NOTHROW
 	{
-		m_waiters = 0;
-		os_wmb;
+		__atomic_store_n(&m_waiters, 0, __ATOMIC_SEQ_CST);
 	}
 
 	/** Try and acquire the lock using TestAndSet.

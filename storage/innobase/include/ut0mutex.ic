@@ -121,7 +121,7 @@ TTASEventMutex<Policy>::signal() UNIV_NOTHROW
 	clear_waiters();
 
 	/* The memory order of resetting the waiters field and
-	signaling the object is important. See LEMMA 1 above. */
+	signaling the object is important. */
 	os_event_set(&m_event);
 
 	sync_array_object_signalled();
