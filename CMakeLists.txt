@@ -512,6 +512,19 @@ IF (ENABLE_GPROF AND NOT WIN32 AND NOT APPLE)
   STRING_APPEND(CMAKE_EXE_LINKER_FLAGS " -pg")
 ENDIF()
 
+# For aarch64 some sub-architectures support LSE atomics and some don't. Thus,
+# compiling for the common denominator (-march=armv8-a) means LSE is not used.
+# The -moutline-atomics switch enables run-time detection of LSE support.
+# There are compilers (gcc 9.3.1 for example) which support this switch, but
+# do not enable it by default, even though it seems to help. So, we force it.
+IF(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
+  MY_CHECK_CXX_COMPILER_FLAG( "-moutline-atomics" HAVE_OUTLINE_ATOMICS)
+  IF(HAVE_OUTLINE_ATOMICS)
+    STRING_APPEND(CMAKE_C_FLAGS   " -moutline-atomics")
+    STRING_APPEND(CMAKE_CXX_FLAGS " -moutline-atomics")
+  ENDIF()
+ENDIF()
+
 # Linker/binutils bug in Fedora 28, Ubuntu 16.04, Debian 8 and Debian 9,
 # undefined reference to symbol '__bss_start'
 IF(LINUX_FEDORA_28 OR LINUX_UBUNTU_16_04 OR LINUX_DEBIAN_8 OR LINUX_DEBIAN_9)
