@@ -427,7 +427,217 @@ ut_crc32_byte_by_byte_hw(
 
 	return(~crc);
 }
-#endif /* defined(__GNUC__) && defined(__x86_64__) */
+#elif defined(__GNUC__) && defined(__aarch64__)
+
+#ifdef __linux__
+#include <sys/auxv.h>
+#ifndef HWCAP_CRC32
+#define HWCAP_CRC32 (1 << 7)
+#endif
+#endif /* __linux__ */
+
+#pragma GCC push_options
+#pragma GCC target("+crc")
+#include <arm_acle.h>
+
+/** Calculate CRC32 over 8-bit data using a hardware/CPU instruction.
+@param[in,out]	crc	crc32 checksum so far when this function is called,
+when the function ends it will contain the new checksum
+@param[in,out]	data	data to be checksummed, the pointer will be advanced
+with 1 byte
+@param[in,out]	len	remaining bytes, it will be decremented with 1 */
+inline
+void
+ut_crc32_8_hw(
+	uint32_t*	crc,
+	const byte**	data,
+	ulint*		len)
+{
+	*crc = __crc32cb(*crc, (*data)[0]);
+
+	(*data)++;
+	(*len)--;
+}
+
+/** Calculate CRC32 over a 64-bit integer using a hardware/CPU instruction.
+@param[in]	crc	crc32 checksum so far
+@param[in]	data	data to be checksummed
+@return resulting checksum of crc + crc(data) */
+inline
+uint32_t
+ut_crc32_64_low_hw(
+	uint32_t	crc,
+	uint64_t	data)
+{
+	return(static_cast<uint32_t>(__crc32cd(crc, data)));
+}
+
+/** Calculate CRC32 over 64-bit byte string using a hardware/CPU instruction.
+@param[in,out]	crc	crc32 checksum so far when this function is called,
+when the function ends it will contain the new checksum
+@param[in,out]	data	data to be checksummed, the pointer will be advanced
+with 8 bytes
+@param[in,out]	len	remaining bytes, it will be decremented with 8 */
+inline
+void
+ut_crc32_64_hw(
+	uint32_t*	crc,
+	const byte**	data,
+	ulint*		len)
+{
+	uint64_t	data_int = *reinterpret_cast<const uint64_t*>(*data);
+
+	*crc = ut_crc32_64_low_hw(*crc, data_int);
+
+	*data += 8;
+	*len -= 8;
+}
+
+/** Calculate CRC32 over 64-bit byte string using a hardware/CPU instruction.
+The byte string is converted to a 64-bit integer using big endian byte order.
+@param[in,out]	crc	crc32 checksum so far when this function is called,
+when the function ends it will contain the new checksum
+@param[in,out]	data	data to be checksummed, the pointer will be advanced
+with 8 bytes
+@param[in,out]	len	remaining bytes, it will be decremented with 8 */
+inline
+void
+ut_crc32_64_legacy_big_endian_hw(
+	uint32_t*	crc,
+	const byte**	data,
+	ulint*		len)
+{
+	uint64_t	data_int = *reinterpret_cast<const uint64_t*>(*data);
+
+	data_int = ut_crc32_swap_byteorder(data_int);
+
+	*crc = ut_crc32_64_low_hw(*crc, data_int);
+
+	*data += 8;
+	*len -= 8;
+}
+
+/** Calculates CRC32 using hardware/CPU instructions.
+@param[in]	buf	data over which to calculate CRC32
+@param[in]	len	data length
+@return CRC-32C (polynomial 0x11EDC6F41) */
+uint32_t
+ut_crc32_hw(
+	const byte*	buf,
+	ulint		len)
+{
+	uint32_t	crc = 0xFFFFFFFFU;
+
+	ut_a(ut_crc32_sse2_enabled);
+
+	while (len > 0 && (reinterpret_cast<uintptr_t>(buf) & 7) != 0) {
+		ut_crc32_8_hw(&crc, &buf, &len);
+	}
+
+	while (len >= 128) {
+		ut_crc32_64_hw(&crc, &buf, &len);
+		ut_crc32_64_hw(&crc, &buf, &len);
+		ut_crc32_64_hw(&crc, &buf, &len);
+		ut_crc32_64_hw(&crc, &buf, &len);
+		ut_crc32_64_hw(&crc, &buf, &len);
+		ut_crc32_64_hw(&crc, &buf, &len);
+		ut_crc32_64_hw(&crc, &buf, &len);
+		ut_crc32_64_hw(&crc, &buf, &len);
+		ut_crc32_64_hw(&crc, &buf, &len);
+		ut_crc32_64_hw(&crc, &buf, &len);
+		ut_crc32_64_hw(&crc, &buf, &len);
+		ut_crc32_64_hw(&crc, &buf, &len);
+		ut_crc32_64_hw(&crc, &buf, &len);
+		ut_crc32_64_hw(&crc, &buf, &len);
+		ut_crc32_64_hw(&crc, &buf, &len);
+		ut_crc32_64_hw(&crc, &buf, &len);
+	}
+
+	while (len >= 8) {
+		ut_crc32_64_hw(&crc, &buf, &len);
+	}
+
+	while (len > 0) {
+		ut_crc32_8_hw(&crc, &buf, &len);
+	}
+
+	return(~crc);
+}
+
+/** Calculates CRC32 using hardware/CPU instructions.
+This function uses big endian byte ordering when converting byte sequence to
+integers.
+@param[in]	buf	data over which to calculate CRC32
+@param[in]	len	data length
+@return CRC-32C (polynomial 0x11EDC6F41) */
+uint32_t
+ut_crc32_legacy_big_endian_hw(
+	const byte*	buf,
+	ulint		len)
+{
+	uint32_t	crc = 0xFFFFFFFFU;
+
+	ut_a(ut_crc32_sse2_enabled);
+
+	while (len > 0 && (reinterpret_cast<uintptr_t>(buf) & 7) != 0) {
+		ut_crc32_8_hw(&crc, &buf, &len);
+	}
+
+	while (len >= 128) {
+		ut_crc32_64_legacy_big_endian_hw(&crc, &buf, &len);
+		ut_crc32_64_legacy_big_endian_hw(&crc, &buf, &len);
+		ut_crc32_64_legacy_big_endian_hw(&crc, &buf, &len);
+		ut_crc32_64_legacy_big_endian_hw(&crc, &buf, &len);
+		ut_crc32_64_legacy_big_endian_hw(&crc, &buf, &len);
+		ut_crc32_64_legacy_big_endian_hw(&crc, &buf, &len);
+		ut_crc32_64_legacy_big_endian_hw(&crc, &buf, &len);
+		ut_crc32_64_legacy_big_endian_hw(&crc, &buf, &len);
+		ut_crc32_64_legacy_big_endian_hw(&crc, &buf, &len);
+		ut_crc32_64_legacy_big_endian_hw(&crc, &buf, &len);
+		ut_crc32_64_legacy_big_endian_hw(&crc, &buf, &len);
+		ut_crc32_64_legacy_big_endian_hw(&crc, &buf, &len);
+		ut_crc32_64_legacy_big_endian_hw(&crc, &buf, &len);
+		ut_crc32_64_legacy_big_endian_hw(&crc, &buf, &len);
+		ut_crc32_64_legacy_big_endian_hw(&crc, &buf, &len);
+		ut_crc32_64_legacy_big_endian_hw(&crc, &buf, &len);
+	}
+
+	while (len >= 8) {
+		ut_crc32_64_legacy_big_endian_hw(&crc, &buf, &len);
+	}
+
+	while (len > 0) {
+		ut_crc32_8_hw(&crc, &buf, &len);
+	}
+
+	return(~crc);
+}
+
+/** Calculates CRC32 using hardware/CPU instructions.
+This function processes one byte at a time (very slow) and thus it does
+not depend on the byte order of the machine.
+@param[in]	buf	data over which to calculate CRC32
+@param[in]	len	data length
+@return CRC-32C (polynomial 0x11EDC6F41) */
+uint32_t
+ut_crc32_byte_by_byte_hw(
+	const byte*	buf,
+	ulint		len)
+{
+	uint32_t	crc = 0xFFFFFFFFU;
+
+	ut_a(ut_crc32_sse2_enabled);
+
+	while (len > 0) {
+		ut_crc32_8_hw(&crc, &buf, &len);
+	}
+
+	return(~crc);
+}
+
+#pragma GCC pop_options
+
+#endif /* defined(__GNUC__) && defined(__x86_64__) / defined(__aarch64__) */
 
 /* CRC32 software implementation. */
 
@@ -715,7 +925,20 @@ ut_crc32_init()
 		ut_crc32_byte_by_byte = ut_crc32_byte_by_byte_hw;
 	}
 
-#endif /* defined(__GNUC__) && defined(__x86_64__) */
+#elif defined(__GNUC__) && defined(__aarch64__)
+#ifdef __linux__
+	ut_crc32_sse2_enabled = (getauxval(AT_HWCAP) & HWCAP_CRC32) != 0;
+#elif defined(__APPLE__)
+	ut_crc32_sse2_enabled = true;
+#endif
+
+	if (ut_crc32_sse2_enabled) {
+		ut_crc32 = ut_crc32_hw;
+		ut_crc32_legacy_big_endian = ut_crc32_legacy_big_endian_hw;
+		ut_crc32_byte_by_byte = ut_crc32_byte_by_byte_hw;
+	}
+
+#endif /* defined(__GNUC__) && defined(__x86_64__) / defined(__aarch64__) */
 
 	if (!ut_crc32_sse2_enabled) {
 		ut_crc32_slice8_table_init();
