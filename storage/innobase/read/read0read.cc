@@ -505,7 +505,7 @@ ReadView::complete()
 
 	ut_ad(m_up_limit_id <= m_low_limit_id);
 
-	m_closed = false;
+	__atomic_store_n(&m_closed, false, __ATOMIC_SEQ_CST);
 }
 
 /**
@@ -550,7 +550,7 @@ MVCC::view_release(ReadView*& view)
 
 	view = reinterpret_cast<ReadView*>(p & ~1);
 
-	ut_ad(view->m_closed);
+	ut_ad(__atomic_load_n(&view->m_closed, __ATOMIC_SEQ_CST));
 	ut_ad(!view->m_cloned);
 
 	/** RW transactions should not free their views here. Their views
@@ -583,7 +583,7 @@ MVCC::view_open(ReadView*& view, trx_t* trx)
 
 		view = reinterpret_cast<ReadView*>(p & ~1);
 
-		ut_ad(view->m_closed);
+		ut_ad(__atomic_load_n(&view->m_closed, __ATOMIC_SEQ_CST));
 
 		/* NOTE: This can be optimised further, for now we only
 		resuse the view iff there are no active RW transactions.
@@ -595,12 +595,12 @@ MVCC::view_open(ReadView*& view, trx_t* trx)
 
 		if (trx_is_autocommit_non_locking(trx) && view->empty()) {
 
-			view->m_closed = false;
+			__atomic_store_n(&view->m_closed, false, __ATOMIC_SEQ_CST);
 
 			if (view->m_low_limit_id == trx_sys_get_max_trx_id()) {
 				return;
 			} else {
-				view->m_closed = true;
+				__atomic_store_n(&view->m_closed, true, __ATOMIC_SEQ_CST);
 			}
 		}
 
@@ -749,7 +749,7 @@ ReadView::clone(ReadView*& result, trx_t* from_trx) const
 	// If the clone transaction is RO and is later promoted to RW, make
 	// sure not to add its own id to its view
 	result->m_cloned = true;
-	result->m_closed = false;
+	__atomic_store_n(&result->m_closed, false, __ATOMIC_SEQ_CST);
 }
 
 /** Clones the oldest view and stores it in view. No need to
@@ -824,7 +824,9 @@ MVCC::view_close(ReadView*& view, bool own_mutex)
 
 		/* Note this can be called for a read view that
 		was already closed. */
-		ptr->m_closed = true;
+		if (!__atomic_load_n(&ptr->m_closed, __ATOMIC_SEQ_CST)) {
+			__atomic_store_n(&ptr->m_closed, true, __ATOMIC_SEQ_CST);
+		}
 		ptr->m_cloned = false;
 
 		/* Set the view as closed. */

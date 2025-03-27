@@ -216,7 +216,7 @@ public:
 	@return true if the view is closed */
 	bool is_closed() const
 	{
-		return(m_closed);
+		return(__atomic_load_n(&m_closed, __ATOMIC_SEQ_CST));
 	}
 
 	/**
